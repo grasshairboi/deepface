@@ -2,18 +2,15 @@
 import os
 import time
 from typing import List, Tuple, Optional
-
 # 3rd party dependencies
 import numpy as np
 import pandas as pd
 import cv2
-
 # project dependencies
 from deepface import DeepFace
+import modules.verification
 from deepface.commons import logger as log
-
 logger = log.get_singletonish_logger()
-
 # dependency configuration
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
@@ -32,6 +29,8 @@ def analysis(
     time_threshold=5,
     frame_threshold=5,
     anti_spoofing: bool = False,
+    # resp_obj=embeddings,
+    # self = verify("../tests/dataset", raw_img)
 ):
     """
     Run real time face recognition and facial attribute analysis
@@ -64,6 +63,7 @@ def analysis(
     Returns:
         None
     """
+
     # initialize models
     build_demography_models(enable_face_analysis=enable_face_analysis)
     build_facial_recognition_model(model_name=model_name)
@@ -141,18 +141,35 @@ def analysis(
 
                 # start counter for freezing
                 tic = time.time()
-                logger.info("freezed")
 
         elif freeze is True and time.time() - tic > time_threshold:
             freeze = False
             freezed_img = None
             # reset counter for freezing
             tic = time.time()
-            logger.info("freeze released")
 
         freezed_img = countdown_to_release(img=freezed_img, tic=tic, time_threshold=time_threshold)
 
         cv2.imshow("img", img if freezed_img is None else freezed_img)
+        for idx, (x, y, w, h, is_real, antispoof_score) in enumerate(faces_coordinates):
+            detected_face = detected_faces[idx]
+            target_label, target_img = search_identity(
+                detected_face=detected_face,
+                db_path=db_path,
+                detector_backend=detector_backend,
+                distance_metric=distance_metric,
+                model_name=model_name,
+            )
+            if target_label is None:
+                continue
+            elif is_real is False:
+                cap.release()
+                cv2.destroyAllWindows()
+            else:
+                cap.release()
+                cv2.destroyAllWindows()
+                resp_obj = modules.verification.verify(img1_path=raw_img, img2_path=target_label, anti_spoofing=True)
+                return {"status": "success", "target_label": target_label, "verified": resp_obj["verified"]}
 
         if cv2.waitKey(1) & 0xFF == ord("q"):  # press q to quit
             break
@@ -160,19 +177,19 @@ def analysis(
     # kill open cv things
     cap.release()
     cv2.destroyAllWindows()
+    return {"status": "no_match"}
 
 
 def build_facial_recognition_model(model_name: str) -> None:
-    """
-    Build facial recognition model
-    Args:
-        model_name (str): Model for face recognition. Options: VGG-Face, Facenet, Facenet512,
-            OpenFace, DeepFace, DeepID, Dlib, ArcFace, SFace and GhostFaceNet (default is VGG-Face).
-    Returns
-        input_shape (tuple): input shape of given facial recognitio n model.
-    """
+    # """
+    # Build facial recognition model
+    # Args:
+    #     model_name (str): Model for face recognition. Options: VGG-Face, Facenet, Facenet512,
+    #         OpenFace, DeepFace, DeepID, Dlib, ArcFace, SFace and GhostFaceNet (default is VGG-Face).
+    # Returns
+    #     input_shape (tuple): input shape of given facial recognition model.
+    # """
     _ = DeepFace.build_model(model_name=model_name)
-    logger.info(f"{model_name} is built")
 
 
 def search_identity(
@@ -232,7 +249,6 @@ def search_identity(
 
     candidate = df.iloc[0]
     target_path = candidate["identity"]
-    logger.info(f"Hello, {target_path}")
 
     # load found identity image - extracted if possible
     target_objs = DeepFace.extract_faces(
@@ -254,7 +270,7 @@ def search_identity(
     else:
         target_img = cv2.imread(target_path)
 
-    return target_path.split("/")[-1], target_img
+    return target_path, target_img
 
 
 def build_demography_models(enable_face_analysis: bool) -> None:
@@ -298,6 +314,7 @@ def highlight_facial_areas(
         else:
             if is_real is True:
                 color = (0, 255, 0)
+                #   see here
             else:
                 color = (0, 0, 255)
         cv2.rectangle(img, (x, y), (x + w, y + h), color, 1)
@@ -310,16 +327,16 @@ def countdown_to_freeze(
     frame_threshold: int,
     num_frames_with_faces: int,
 ) -> np.ndarray:
-    """
-    Highlight time to freeze in the image's facial areas
-    Args:
-        img (np.ndarray): image itself
-        faces_coordinates (list): list of face coordinates as tuple with x, y, w and h
-        frame_threshold (int): how many sequantial frames required with face(s) to freeze
-        num_frames_with_faces (int): how many sequantial frames do we have with face(s)
-    Returns:
-        img (np.ndarray): image with counter values
-    """
+    # """
+    # Highlight time to freeze in the image's facial areas
+    # Args:
+    #     img (np.ndarray): image itself
+    #     faces_coordinates (list): list of face coordinates as tuple with x, y, w and h
+    #     frame_threshold (int): how many sequantial frames required with face(s) to freeze
+    #     num_frames_with_faces (int): how many sequantial frames do we have with face(s)
+    # Returns:
+    #     img (np.ndarray): image with counter values
+    # """
     for x, y, w, h, is_real, antispoof_score in faces_coordinates:
         cv2.putText(
             img,
@@ -361,7 +378,6 @@ def countdown_to_release(
         1,
     )
     return img
-
 
 def grab_facial_areas(
     img: np.ndarray, detector_backend: str, threshold: int = 130, anti_spoofing: bool = False
@@ -473,12 +489,13 @@ def perform_facial_recognition(
 
     return img
 
-
 def perform_demography_analysis(
     enable_face_analysis: bool,
     img: np.ndarray,
     faces_coordinates: List[Tuple[int, int, int, int, bool, float]],
     detected_faces: List[np.ndarray],
+    # model_name: str,
+    # detector_backend: str
 ) -> np.ndarray:
     """
     Perform demography analysis on given image
@@ -502,7 +519,6 @@ def perform_demography_analysis(
             enforce_detection=False,
             silent=True,
         )
-
         if len(demographies) == 0:
             continue
 
@@ -519,7 +535,7 @@ def perform_demography_analysis(
             w=w,
             h=h,
         )
-    return img
+        return img
 
 
 def overlay_identified_face(
@@ -1000,4 +1016,4 @@ def overlay_age_gender(
             2,
         )
 
-    return img
+        return img

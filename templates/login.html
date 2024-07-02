@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login with Face Recognition</title>
+    <style>
+        #camera {
+            display: none;
+        }
+        #video, #capture {
+            display: none;
+        }
+        #capture {
+            margin-top: 10px;
+        }
+        #loginFields {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Login with Face Recognition</h1>
+    <form id="loginForm" action="{{ url_for('login') }}" method="post">
+        <div id="loginFields">
+            <input type="text" name="username" placeholder="Username"><br>
+            <input type="password" name="password" placeholder="Password"><br>
+        </div>
+        <video id="video" width="320" height="240" autoplay></video>
+        <button type="button" id="capture">Capture Photo</button><br>
+        <canvas id="camera" width="320" height="240"></canvas>
+        <input type="hidden" name="face_image" id="face_image">
+        <button type="submit">Login</button>
+        <button type="button" id="faceRecognitionButton">Face Recognition</button>
+        <button type="button" id="showLoginFieldsButton">Use Username and Password</button>
+    </form>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('camera');
+        const captureButton = document.getElementById('capture');
+        const faceImageInput = document.getElementById('face_image');
+        const context = canvas.getContext('2d');
+        const faceRecognitionButton = document.getElementById('faceRecognitionButton');
+        const showLoginFieldsButton = document.getElementById('showLoginFieldsButton');
+        const loginFields = document.getElementById('loginFields');
+        const loginButton = document.getElementById('loginButton');
+
+        // Get access to the camera
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+                video.srcObject = stream;
+                video.play();
+            });
+        }
+
+        faceRecognitionButton.addEventListener('click', function() {
+            video.style.display = 'block';
+            captureButton.style.display = 'block';
+            faceRecognitionButton.style.display = 'none';
+        });
+
+        showLoginFieldsButton.addEventListener('click', function() {
+            loginFields.style.display = 'block';
+            loginButton.style.display = 'block';
+            showLoginFieldsButton.style.display = 'none';
+        });
+
+        // Capture photo
+        captureButton.addEventListener('click', function() {
+            context.drawImage(video, 0, 0, 320, 240);
+            const dataURL = canvas.toDataURL('image/jpeg');
+            faceImageInput.value = dataURL;
+
+            const formData = new FormData();
+            formData.append('face_image', dataURL);
+
+            fetch('{{ url_for("login") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);  // Display the message in an alert
+                if (data.status === 'success') {
+                    alert('Face recognized successfully. Logging you in...');
+                    window.location.href = '{{ url_for("home") }}';
+                } else {
+                    if (data.face_attempts >= 3) {
+                        video.style.display = 'none';
+                        captureButton.style.display = 'none';
+                        faceRecognitionButton.style.display = 'block';
+                        showLoginFieldsButton.style.display = 'block';
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    </script>
+</body>
+</html>

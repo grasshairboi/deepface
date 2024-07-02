@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.1/css/all.css">
+    <style>
+        #video, #capture, #loginButton, #faceRecognitionButton, #showLoginFieldsButton {
+            display: block;
+            margin: 10px auto;
+        }
+        #loginFields {
+            display: none;
+        }
+    </style>
+    <meta charset="utf-8">
+    <title>Register</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        video, canvas {
+            display: block;
+            margin: 10px auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="register">
+    <h1>Register</h1>
+    <div class="links">
+        <a href="{{ url_for('login') }}" >Login</a>
+        <a href="{{ url_for('register') }}" class="active">Register</a>
+    </div>
+    <form action="{{ url_for('register') }}" method="post" enctype="multipart/form-data">
+        <input type="text" name="username" placeholder="Username" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <input type="email" name="email" placeholder="Email" required><br>
+        <input type="file" name="face_image_file" accept="image/*"><br>
+        <video id="video" width="320" height="240" autoplay></video>
+        <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
+        <input type="hidden" name="face_image_data" id="face_image_data">
+        <button type="button" onclick="captureImage()">Capture Image</button>
+        <input type="submit" value="Register">
+        <div class="msg">{{ msg }}</div>
+    </form>
+</div>
+
+<script>
+    // Access the camera
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const faceImageDataInput = document.getElementById('face_image_data');
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+            video.srcObject = stream;
+        });
+    }
+
+    function captureImage() {
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, 320, 240);
+        const dataURL = canvas.toDataURL('image/jpeg');
+        faceImageDataInput.value = dataURL;
+    }
+</script>
+</body>
+</html>
